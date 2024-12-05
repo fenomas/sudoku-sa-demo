@@ -77,7 +77,7 @@ const initSolver = () => {
   })
 
   solver.iterationBudget = 1e6
-  const itersPerFrame = 1e5
+  const itersPerFrame = 1e4
 
   return () => {
     solver.run(state, itersPerFrame)
