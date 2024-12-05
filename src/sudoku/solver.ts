@@ -1,16 +1,25 @@
-// working
 import { createSignal } from 'solid-js'
-import { coordToIx, getData, setData, size, countConflicts } from './game'
+import {
+  countConflictsAt,
+  countTotalError,
+  currErrCt,
+  gridData,
+  setCurrErrCt,
+  size,
+  updateView,
+} from './game'
 
 // state and interface
 export const [isSolving, setIsSolving] = createSignal(false)
 export const [numIters, setNumIters] = createSignal(0)
 export const [currTemp, setCurrTemp] = createSignal(1)
+export const [currK, setCurrK] = createSignal(1)
+
+let iterateFn = (n = 0) => {}
 
 export const startSolving = () => {
-  data = getData().slice()
   setNumIters(0)
-  initSolver()
+  iterateFn = initSolver()
   setIsSolving(true)
   runSA()
 }
@@ -20,98 +29,60 @@ export const stopSolving = () => {
 
 // RAF loop
 const runSA = () => {
-  const iter = 10000
-  for (let i = 0; i < iter; i++) {
-    iterate()
-    if (totalErr === 0) {
-      stopSolving()
-      break
-    }
-  }
-  setNumIters((n) => n + iter)
-  setCurrTemp(temp)
-  setData(data.slice())
+  iterateFn()
+  updateView()
+  if (currErrCt() === 0) setIsSolving(false)
   if (isSolving()) requestAnimationFrame(runSA)
 }
 
 // helpers to make the iterate function understandable
 const rand = (n = 1) => Math.floor(Math.random() * n)
-const randomCoord = (): [number, number] => {
-  const [i, j] = [rand(size), rand(size)]
-  return wasSolved[coordToIx(i, j)] ? randomCoord() : [i, j]
-}
-const measureError = (i: number, j: number, val: number) =>
-  countConflicts(data, coordToIx(i, j), val)
-const updateTotalError = () =>
-  (totalErr = data.reduce((acc, val, ix) => acc + countConflicts(data, ix, val), 0))
-const getGridValue = (i: number, j: number) => data[coordToIx(i, j)]
-const setGridValue = (i: number, j: number, val: number) => (data[coordToIx(i, j)] = val)
-const randomDifferentValue = (oldVal: number): number => {
-  const val = rand(size) + 1
-  return val === oldVal ? randomDifferentValue(oldVal) : val
-}
 
 /**
  *
  *
- *   Simulated Annealing
+ *   Data and Simulated Annealing solver
  */
 
-let temp = 1
-let totalErr = 1
-let data = getData().slice()
-let wasSolved = data.map(() => false)
+import { AnnealingSolver } from 'abstract-sim-anneal'
 
 const initSolver = () => {
-  temp = 0.5
-  // remember which cells started out solved, and what they were
-  wasSolved = data.map((val, ix) => val > 0 && countConflicts(data, ix, val) === 0)
-  const numsUsed = Array.from(Array(size)).fill(0)
-  wasSolved.forEach((solved, ix) => {
-    if (solved) numsUsed[data[ix] - 1]++
+  // solver state is available numbers after removing vals of fixed cells
+  const nums = Array.from(Array(size)).map((_, i) => Array.from(Array(size)).fill(i + 1))
+  gridData.forEach((cell) => {
+    if (cell.isFixed) nums[cell.value - 1].pop()
   })
-  // fill in the rest with whatever
-  data.forEach((_, ix) => {
-    if (wasSolved[ix]) return
-    numsUsed.some((ct, i) => {
-      if (ct < size) {
-        data[ix] = i + 1
-        numsUsed[i]++
-        return true
-      }
-    })
+  const state = nums.flat()
+  const indexes = gridData.map((cell, i) => (cell.isFixed ? -1 : i)).filter((ix) => ix >= 0)
+  indexes.forEach((ix, i) => {
+    gridData[ix].value = state[i]
   })
-  updateTotalError()
-}
 
-/**
- *
- *
- *  core solver logic
- *
- *
- */
+  // solver init
+  const solver = new AnnealingSolver<number[], number[]>({
+    chooseMove: (state) => {
+      let [i, j] = [rand(state.length), rand(state.length)]
+      if (i === j) j = (i + 1) % state.length
+      const [ix, jx] = [indexes[i], indexes[j]]
+      const err1 = countConflictsAt(ix, state[i]) + countConflictsAt(jx, state[j])
+      const err2 = countConflictsAt(ix, state[j]) + countConflictsAt(jx, state[i])
+      return { errorDelta: err2 - err1, move: [i, j] }
+    },
+    applyMove: (state, [i, j]) => {
+      ;[state[i], state[j]] = [state[j], state[i]]
+      gridData[indexes[i]].value = state[i]
+      gridData[indexes[j]].value = state[i]
+      return state
+    },
+  })
 
-const iterate = () => {
-  temp *= 0.9999999
-  const [i, j] = randomCoord()
-  const [x, y] = randomCoord()
+  solver.iterationBudget = 1e6
+  const itersPerFrame = 1e5
 
-  const val = getGridValue(i, j)
-  const val2 = getGridValue(x, y)
-  if (val === val2) return iterate()
-
-  const err = measureError(i, j, val) + measureError(x, y, val2)
-  const err2 = measureError(i, j, val2) + measureError(x, y, val)
-
-  if (shouldSwap(err2 - err)) {
-    setGridValue(i, j, val2)
-    setGridValue(x, y, val)
-    updateTotalError()
+  return () => {
+    solver.run(state, itersPerFrame)
+    setNumIters((n) => n + itersPerFrame)
+    setCurrTemp(solver.currentTemperature)
+    setCurrK(solver.k || solver.learnedK)
   }
-}
-
-const shouldSwap = (errDiff: number) => {
-  if (errDiff < 0) return true
-  return Math.random() < Math.exp(-errDiff / temp)
 }

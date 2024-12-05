@@ -1,4 +1,4 @@
-import { boxSize, setGrid } from './game'
+import { boxSize, getCell, updateView } from '../sudoku/game'
 
 const getCellStyle = (i = 0, j = 0, isErr = false) => {
   const margin = 2
@@ -19,6 +19,14 @@ const getCellStyle = (i = 0, j = 0, isErr = false) => {
 export const Cell = (i: number, j: number, value: number, isErr: boolean) => {
   let input!: HTMLInputElement
 
+  const setCell = (i = 0, j = 0, val = '') => {
+    const cell = getCell(i, j)
+    const num = parseInt(val)
+    cell.value = num > 0 ? num : 0
+    cell.isFixed = num > 0
+    updateView()
+  }
+
   return (
     <input
       id={`cell-${i}-${j}`}
@@ -29,11 +37,10 @@ export const Cell = (i: number, j: number, value: number, isErr: boolean) => {
         input.value = ''
       }}
       oninput={() => {
-        setGrid(i, j, parseInt(input.value) || 0)
+        setCell(i, j, input.value)
       }}
       onblur={() => {
-        const num = parseInt(input.value) || 0
-        if (!(num > 0)) setGrid(i, j, num)
+        setCell(i, j, input.value)
       }}
     />
   )

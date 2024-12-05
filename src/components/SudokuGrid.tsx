@@ -1,16 +1,17 @@
 import { Cell } from './Cell'
-import { size, getData, getErrs, coordToIx, getErrCt } from './game'
-import { currTemp, isSolving, numIters, startSolving, stopSolving } from './solver'
-import { resetGame } from './presets'
+import { currK, currTemp, isSolving, numIters, startSolving, stopSolving } from '../sudoku/solver'
+import { resetGame } from '../sudoku/presets'
+import { size, currBoardState, currErrCt } from '../sudoku/game'
 
 const GridView = () => {
   const arr = Array.from(Array(size))
   return arr.map((_, i) => (
     <div>
       {arr.map((_, j) => {
-        const ix = coordToIx(i, j)
-        const val = getData()[ix]
-        const isErr = val > 0 && getErrs()[ix]
+        const ix = i * size + j
+        const state = currBoardState()
+        const val = state.nums[ix]
+        const isErr = state.errs[ix]
         return Cell(i, j, val, isErr)
       })}
     </div>
@@ -47,9 +48,11 @@ const Stats = () => (
   <div>
     <span>Iterations: {numIters()}</span>
     <br />
-    <span>Error: {getErrCt()}</span>
+    <span>Error: {currErrCt()}</span>
     <br />
-    <span>Temp: {currTemp().toFixed(5)}</span>
+    <span>K: {currK().toFixed(3)}</span>
+    <br />
+    <span>Temp: {currTemp().toFixed(8)}</span>
   </div>
 )
 
@@ -58,7 +61,7 @@ export const SudokuGrid = () => {
     <>
       <GridView />
       <PresetButtons />
-      {getErrCt() === 0 ? <h1>Done!</h1> : isSolving() ? <StopButton /> : <StartButton />}
+      {currErrCt() === 0 ? <h1>Done!</h1> : isSolving() ? <StopButton /> : <StartButton />}
       <Stats />
     </>
   )

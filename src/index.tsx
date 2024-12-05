@@ -1,5 +1,5 @@
 import { render } from 'solid-js/web'
-import { SudokuGrid } from './sudoku/sudokuGrid'
+import { SudokuGrid } from './components/SudokuGrid'
 
 const root = document.getElementById('root')
 
